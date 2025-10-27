@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert Input Parser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            border: none;
+            resize: none;
+            font-family: 'Sans-Serif', monospace;
+            font-size: 14px;
+            padding: 0;
+            outline: none;
+        }
+
+        .button-container {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .parse-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .parse-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .clear-btn {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .clear-btn:hover {
+            background: #d0d0d0;
+        }
+
+        .copy-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        .copy-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .output {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .alert-block {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            border-radius: 4px;
+            color: #c62828;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 968px) {
+            .container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .panel {
+                min-height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <div class="panel-header">Input</div>
+            <div class="panel-content">
+                <textarea id="input" placeholder="Paste your input here. Each alert should be separated by a blank line.
+
+Example format:
+P1    #123. Database Connection Issue    The application is unable to connect to the primary database    • Check database server status
+• Verify connection strings
+• Restart database service
+
+P2    #456. Memory Leak    Server memory usage increasing over time    • Review application logs
+• Analyze heap dump
+• Apply latest patches"></textarea>
+            </div>
+            <div class="button-container">
+                <div style="display: flex; gap: 10px; align-items: center; flex: 1;">
+                    <label for="dateInput" style="font-weight: 600; color: #333;">Date:</label>
+                    <input type="text" id="dateInput" placeholder="e.g., Oct 24, 2025" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                </div>
+                <button class="parse-btn" onclick="parseInput()">Parse Input</button>
+                <button class="clear-btn" onclick="clearAll()">Clear All</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Output</div>
+            <div class="panel-content">
+                <div id="output" class="output"></div>
+            </div>
+            <div class="button-container">
+                <button class="copy-btn" onclick="copyOutput()">Copy Output</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function parseInput() {
+            const input = document.getElementById('input').value;
+            const dateInput = document.getElementById('dateInput').value;
+            const outputDiv = document.getElementById('output');
+            
+            if (!input.trim()) {
+                outputDiv.innerHTML = '<div class="error">Please enter some input to parse.</div>';
+                return;
+            }
+
+            if (!dateInput) {
+                outputDiv.innerHTML = '<div class="error">Please select a date.</div>';
+                return;
+            }
+
+            // Format date to a readable format
+            const dateObj = new Date(dateInput);
+            const formattedDate = dateObj.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+
+            // Split by double newlines or multiple newlines to separate different alerts
+            const alerts = input.split(/\n\s*\n/).filter(a => a.trim());
+            
+            if (alerts.length === 0) {
+                outputDiv.innerHTML = '<div class="error">No valid alerts found in input.</div>';
+                return;
+            }
+
+            let output = '';
+            
+            alerts.forEach((alert, idx) => {
+                try {
+                    const parsed = parseAlert(alert);
+                    output += formatOutput(parsed, formattedDate);
+                    if (idx < alerts.length - 1) {
+                        output += '\n\n';
+                    }
+                } catch (e) {
+                    output += `<div class="error">Error parsing alert ${idx + 1}: ${e.message}</div>\n\n`;
+                }
+            });
+
+            outputDiv.innerHTML = output;
+        }
+
+        function parseAlert(alertText) {
+            // Split into lines and clean them
+            const lines = alertText.split('\n').map(l => l.trim()).filter(l => l);
+            
+            if (lines.length < 3) {
+                throw new Error('Alert must have at least 3 columns');
+            }
+
+            // First line contains all columns separated by multiple spaces/tabs
+            const firstLine = lines[0];
+            
+            // Split by multiple spaces or tabs to get columns
+            const columns = firstLine.split(/\s{2,}|\t+/).filter(c => c.trim());
+            
+            let priority = '';
+            let indexAndName = '';
+            let description = '';
+            let resolutionSteps = [];
+
+            if (columns.length >= 3) {
+                // Standard case: columns are on the same line
+                priority = columns[0].trim();
+                indexAndName = columns[1].trim();
+                description = columns[2].trim();
+                
+                // Resolution steps might be on the same line (4th column) or on subsequent lines
+                if (columns.length >= 4) {
+                    resolutionSteps.push(columns[3].trim());
+                }
+                
+                // Check remaining lines for resolution steps
+                for (let i = 1; i < lines.length; i++) {
+                    resolutionSteps.push(lines[i].trim());
+                }
+            } else {
+                // Alternative: each column on separate lines
+                priority = lines[0].trim();
+                indexAndName = lines[1].trim();
+                description = lines[2].trim();
+                
+                for (let i = 3; i < lines.length; i++) {
+                    resolutionSteps.push(lines[i].trim());
+                }
+            }
+
+            // Parse index and name from format "#<Index>. <Name>"
+            const indexMatch = indexAndName.match(/#(\d+)\.\s*(.+)/);
+            if (!indexMatch) {
+                throw new Error('Invalid format for Index and Name. Expected format: #123. Name');
+            }
+
+            const index = indexMatch[1];
+            const name = indexMatch[2];
+
+            return {
+                priority,
+                index,
+                name,
+                description,
+                resolutionSteps: resolutionSteps.filter(s => s)
+            };
+        }
+
+        function formatOutput(parsed, formattedDate) {
+            let output = '<div class="alert-block">';
+            
+            // First section
+            output += `Fix ${parsed.priority} alert #${parsed.index} ${parsed.name}\n`;
+            output += `When: ${formattedDate}\n`;
+            output += `How: Follow the steps given in the TSG to resolve the alert. \n\n`;
+            
+            // Updates section
+            output += `Updates:\n`;
+            output += `${parsed.priority}.${parsed.name}\n`;
+            output += `${parsed.description}\n`;
+            
+            // Resolution steps
+            parsed.resolutionSteps.forEach(step => {
+                output += `${step}\n`;
+            });
+            
+            output+=
+`
+Open Question:
+NA
+
+Blocked Items:
+NA
+
+Action Items:
+NA
+`
+            output += '</div>';
+            return output;
+        }
+
+        function copyOutput() {
+            const outputDiv = document.getElementById('output');
+            const text = outputDiv.innerText;
+            
+            if (!text.trim()) {
+                alert('No output to copy!');
+                return;
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = '#2e7d32';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#4caf50';
+                }, 2000);
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+
+        function clearAll() {
+            document.getElementById('input').value = '';
+            document.getElementById('dateInput').value = '';
+            document.getElementById('output').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
